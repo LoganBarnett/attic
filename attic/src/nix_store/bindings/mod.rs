@@ -186,6 +186,9 @@ mod ffi {
         fn to_store_path(self: Pin<&mut CNixStore>, path: &str) -> Result<String>;
         */
 
+        /// Returns whether a path is valid.
+        fn is_valid_path(self: Pin<&mut CNixStore>, store_path: &[u8]) -> Result<bool>;
+
         /// Queries information about a valid path.
         fn query_path_info(
             self: Pin<&mut CNixStore>,

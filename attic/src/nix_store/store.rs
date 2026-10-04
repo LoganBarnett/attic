@@ -191,6 +191,22 @@ impl NixStore {
         .unwrap()
     }
 
+    /// Returns whether a path is valid.
+    ///
+    /// A path that has been deleted, or that was never registered, is
+    /// not valid.
+    pub async fn is_valid_path(&self, store_path: StorePath) -> AtticResult<bool> {
+        let inner = self.inner.clone();
+
+        spawn_blocking(move || {
+            let base_name = store_path.as_base_name_bytes();
+
+            Ok(inner.store().is_valid_path(base_name)?)
+        })
+        .await
+        .map_err(std::io::Error::from)?
+    }
+
     /// Returns detailed information on a path.
     pub async fn query_path_info(&self, store_path: StorePath) -> AtticResult<ValidPathInfo> {
         let inner = self.inner.clone();

@@ -115,6 +115,7 @@ impl PushContext {
         let session = self.pusher.into_push_session(PushSessionConfig {
             no_closure: self.no_closure,
             ignore_upstream_cache_filter: self.ignore_upstream_cache_filter,
+            keep_going: false,
         });
 
         let stdin = BufReader::new(io::stdin());

@@ -244,3 +244,31 @@ async fn test_query_path_info() {
         path_info.references
     );
 }
+
+#[tokio::test]
+async fn test_is_valid_path() {
+    let store = NixStore::connect().expect("Failed to connect to the Nix store");
+
+    let nar = test_nar::NO_DEPS;
+    nar.import().await.expect("Could not import test NAR");
+
+    let valid = store.parse_store_path(nar.path()).unwrap();
+    assert!(
+        store
+            .is_valid_path(valid)
+            .await
+            .expect("Could not check validity")
+    );
+
+    // well-formed, but never registered
+    let absent = StorePath::from_base_name(PathBuf::from(
+        "00000000000000000000000000000000-attic-test-absent",
+    ))
+    .unwrap();
+    assert!(
+        !store
+            .is_valid_path(absent)
+            .await
+            .expect("Could not check validity")
+    );
+}

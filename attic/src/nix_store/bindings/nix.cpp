@@ -107,6 +107,10 @@ RString CNixStore::store_dir() {
 	return RString(this->store->storeDir);
 }
 
+bool CNixStore::is_valid_path(RBasePathSlice base_name) {
+	return this->store->isValidPath(store_path_from_rust(base_name));
+}
+
 std::unique_ptr<CPathInfo> CNixStore::query_path_info(RBasePathSlice base_name) {
 	auto store_path = store_path_from_rust(base_name);
 

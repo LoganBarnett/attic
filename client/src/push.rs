@@ -60,6 +60,14 @@ pub struct PushSessionConfig {
 
     /// Ignore the upstream cache filter.
     pub ignore_upstream_cache_filter: bool,
+
+    /// Keep the session alive when a batch cannot be pushed.
+    ///
+    /// Roots that are not valid store paths are skipped, and a batch that
+    /// fails to plan is dropped instead of ending the session. This suits
+    /// long-lived sessions fed by a watcher, where a queued path may never
+    /// have become valid or may have been deleted since.
+    pub keep_going: bool,
 }
 
 /// A handle to push store paths to a cache.
@@ -342,25 +350,37 @@ impl PushSession {
                     .collect()
             };
 
-            let mut plan = pusher
+            let roots_vec = if config.keep_going {
+                Self::retain_valid_roots(&pusher.store, roots_vec).await
+            } else {
+                roots_vec
+            };
+
+            let plan = pusher
                 .plan(
                     roots_vec,
                     config.no_closure,
                     config.ignore_upstream_cache_filter,
                 )
-                .await?;
+                .await;
 
-            let mut known_paths = known_paths_mutex.lock().await;
-            plan.store_path_map
-                .retain(|sph, _| !known_paths.contains(sph));
+            match plan {
+                Ok(mut plan) => {
+                    let mut known_paths = known_paths_mutex.lock().await;
+                    plan.store_path_map
+                        .retain(|sph, _| !known_paths.contains(sph));
 
-            // Push everything
-            for (store_path_hash, path_info) in plan.store_path_map.into_iter() {
-                pusher.queue(path_info).await?;
-                known_paths.insert(store_path_hash);
+                    // Push everything
+                    for (store_path_hash, path_info) in plan.store_path_map.into_iter() {
+                        pusher.queue(path_info).await?;
+                        known_paths.insert(store_path_hash);
+                    }
+                }
+                Err(e) if config.keep_going => {
+                    tracing::warn!("Dropping a batch that could not be planned: {}", e);
+                }
+                Err(e) => return Err(e),
             }
-
-            drop(known_paths);
 
             if done {
                 let result = pusher.wait().await;
@@ -368,6 +388,34 @@ impl PushSession {
                 return Ok(());
             }
         }
+    }
+
+    /// Returns the roots that are valid store paths.
+    ///
+    /// A root whose validity cannot be determined is skipped as well.
+    async fn retain_valid_roots(store: &NixStore, roots: Vec<StorePath>) -> Vec<StorePath> {
+        let mut valid = Vec::with_capacity(roots.len());
+
+        for root in roots {
+            match store.is_valid_path(root.clone()).await {
+                Ok(true) => valid.push(root),
+                Ok(false) => {
+                    tracing::debug!(
+                        "Skipping {}: not a valid store path",
+                        root.as_os_str().to_string_lossy()
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Skipping {}: could not check validity: {}",
+                        root.as_os_str().to_string_lossy(),
+                        e
+                    );
+                }
+            }
+        }
+
+        valid
     }
 
     /// Waits for all workers to terminate, returning all results.

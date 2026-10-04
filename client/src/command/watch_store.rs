@@ -70,6 +70,8 @@ pub async fn run(opts: Opts) -> Result<()> {
     let push_session_config = PushSessionConfig {
         no_closure: sub.no_closure,
         ignore_upstream_cache_filter: sub.ignore_upstream_cache_filter,
+        // A removed lock file does not always mean a path became valid
+        keep_going: true,
     };
 
     let mp = MultiProgress::new();
@@ -113,7 +115,9 @@ pub async fn run(opts: Opts) -> Result<()> {
                         .collect::<Vec<StorePath>>();
 
                     if !paths.is_empty() {
-                        session.queue_many(paths).unwrap();
+                        session
+                            .queue_many(paths)
+                            .map_err(|e| anyhow!("The push session has ended: {}", e))?;
                     }
                 }
             }

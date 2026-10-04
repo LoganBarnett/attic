@@ -53,6 +53,7 @@ public:
 	CNixStore();
 
 	RString store_dir();
+	bool is_valid_path(RBasePathSlice base_name);
 	std::unique_ptr<CPathInfo> query_path_info(RBasePathSlice base_name);
 	std::unique_ptr<std::vector<std::string>> compute_fs_closure(
 		RBasePathSlice base_name,
