@@ -260,6 +260,27 @@ in {
           client.succeed("curl -sL --fail-with-body http://server:8080/test/nix-cache-info")
           client.succeed(f"curl -sL --fail-with-body http://server:8080/test/{test_file_hash}.narinfo")
 
+      with subtest("Check that watch-store survives removals that are not new valid paths"):
+          client.succeed("systemd-run --unit=attic-watch-store --setenv=HOME=/root $(command -v attic) watch-store test")
+          client.wait_until_succeeds("journalctl --unit=attic-watch-store | grep 'Pushing new store paths'", timeout=40)
+
+          # Deleting a store path named `*.lock` looks like a lock file
+          # being removed, for a path that was never valid
+          client.succeed("echo decoy >decoy.lock")
+          decoy_file = client.succeed("nix-store --add decoy.lock").strip()
+          client.succeed(f"nix-store --delete {decoy_file}")
+
+          # Let the session submit that batch on its own
+          time.sleep(5)
+
+          client.succeed("${makeTestDerivation} watched.nix")
+          watched_file = client.succeed("nix-build --no-out-link watched.nix").strip()
+          watched_file_hash = watched_file.removeprefix("/nix/store/")[:32]
+
+          client.wait_until_succeeds(f"curl -sL --fail-with-body http://server:8080/test/{watched_file_hash}.narinfo", timeout=60)
+          client.succeed("systemctl is-active attic-watch-store")
+          client.succeed("systemctl stop attic-watch-store")
+
       with subtest("Check that we can trigger garbage collection"):
           test_file_hash = test_file.removeprefix("/nix/store/")[:32]
           client.succeed(f"curl -sL --fail-with-body http://server:8080/test/{test_file_hash}.narinfo")
