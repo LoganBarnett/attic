@@ -88,6 +88,13 @@ features = [
 [dependencies.sea-orm-migration]
 version = "2.0.0-rc.41"
 
+# sqlx-postgres builds whoami without its OS backend, which makes the
+# default PostgreSQL user "anonymous" instead of the user atticd runs as
+[dependencies.whoami]
+version = "2.1.2"
+default-features = false
+features = ["std"]
+
 [dependencies.tokio]
 version = "1.46.1"
 features = [
