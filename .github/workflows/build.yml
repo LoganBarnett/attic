@@ -5,6 +5,11 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+defaults:
+  run:
+    # The implicit shell omits pipefail, which hides a failed `nix build`
+    # that is piped into something else
+    shell: bash
 jobs:
   build:
     strategy:
